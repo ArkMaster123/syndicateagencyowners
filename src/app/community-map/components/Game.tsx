@@ -444,14 +444,31 @@ export default function GameComponent() {
             }
             
             characterSpriteManager.drawCharacter(ctx, characterId, screenX, screenY, facing, npc.id === 'cat' ? animationFrame : 0);
-            
-            // Draw NPC name (skip for cat)
+
+            // Draw NPC name with background (skip for cat)
             if (npc.id !== 'cat') {
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 10px Arial';
+              const nameX = screenX + gameState.tileSize / 2;
+              const nameY = screenY - 8;
+              ctx.font = 'bold 12px Arial';
               ctx.textAlign = 'center';
-              ctx.fillText(npc.name, screenX + gameState.tileSize / 2, screenY - 5);
-              
+
+              // Measure text for background
+              const textMetrics = ctx.measureText(npc.name);
+              const padding = 4;
+
+              // Draw background
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+              ctx.fillRect(
+                nameX - textMetrics.width / 2 - padding,
+                nameY - 12,
+                textMetrics.width + padding * 2,
+                16
+              );
+
+              // Draw name
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(npc.name, nameX, nameY);
+
               // Draw availability indicator
               ctx.fillStyle = npc.available ? '#10b981' : '#ef4444';
               ctx.beginPath();
@@ -476,13 +493,30 @@ export default function GameComponent() {
             
             // Draw online player sprite
             characterSpriteManager.drawCharacter(ctx, player.spriteId, screenX, screenY, player.facing, 0);
-            
-            // Draw online player name
-            ctx.fillStyle = '#60a5fa'; // Blue color for online players
-            ctx.font = 'bold 10px Arial';
+
+            // Draw online player name with background
+            const nameX = screenX + gameState.tileSize / 2;
+            const nameY = screenY - 8;
+            ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(player.name, screenX + gameState.tileSize / 2, screenY - 5);
-            
+
+            // Measure text for background
+            const textMetrics = ctx.measureText(player.name);
+            const padding = 4;
+
+            // Draw background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(
+              nameX - textMetrics.width / 2 - padding,
+              nameY - 12,
+              textMetrics.width + padding * 2,
+              16
+            );
+
+            // Draw name
+            ctx.fillStyle = '#60a5fa'; // Blue color for online players
+            ctx.fillText(player.name, nameX, nameY);
+
             // Draw online indicator
             ctx.fillStyle = '#10b981';
             ctx.beginPath();
@@ -499,15 +533,33 @@ export default function GameComponent() {
           // Draw local player
           const playerScreenX = (gameState.player.x - viewportX) * gameState.tileSize;
           const playerScreenY = (gameState.player.y - viewportY) * gameState.tileSize;
-          
+
           // Draw player sprite with animation
           characterSpriteManager.drawCharacter(ctx, playerSpriteId, playerScreenX, playerScreenY, gameState.player.facing, animationFrame);
-          
-          // Draw player name
-          ctx.fillStyle = '#fbbf24';
-          ctx.font = 'bold 10px Arial';
+
+          // Draw player name with background
+          const nameX = playerScreenX + gameState.tileSize / 2;
+          const nameY = playerScreenY - 8;
+          const displayName = playerName || 'You';
+          ctx.font = 'bold 12px Arial';
           ctx.textAlign = 'center';
-          ctx.fillText(playerName || 'You', playerScreenX + gameState.tileSize / 2, playerScreenY - 5);
+
+          // Measure text for background
+          const textMetrics = ctx.measureText(displayName);
+          const padding = 4;
+
+          // Draw background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(
+            nameX - textMetrics.width / 2 - padding,
+            nameY - 12,
+            textMetrics.width + padding * 2,
+            16
+          );
+
+          // Draw name
+          ctx.fillStyle = '#fbbf24'; // Yellow/gold color for local player
+          ctx.fillText(displayName, nameX, nameY);
         }
       });
 

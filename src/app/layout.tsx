@@ -1,27 +1,31 @@
+import type React from "next";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import { Instrument_Serif } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+import { V0Provider } from "@/lib/context";
+import dynamic from "next/dynamic";
 
-const inter = Inter({
+const V0Setup = dynamic(() => import("@/components/v0-setup"));
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400"],
+  style: ["normal", "italic"],
 });
 
+const isV0 = process.env["VERCEL_URL"]?.includes("vusercontent.net") ?? false;
+
 export const metadata: Metadata = {
-  title: "Agency Syndicate - Community for Progressive Agency Owners",
+  title: {
+    template: "%s | Agency Syndicate",
+    default: "Agency Syndicate - Community for Progressive Agency Owners",
+  },
   description: "Join 500+ agency owners collaborating on SEO, digital marketing, and AI strategies. Connect, scale, and build the future of marketing tech together.",
-  keywords: ["agency owners", "digital marketing", "SEO", "AI strategies", "community", "collaboration"],
-  openGraph: {
-    title: "Agency Syndicate - Community for Progressive Agency Owners",
-    description: "Join 500+ agency owners collaborating on SEO, digital marketing, and AI strategies.",
-    type: "website",
-    locale: "en_US",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Agency Syndicate",
-    description: "Join 500+ agency owners collaborating on SEO, digital marketing, and AI strategies.",
-  },
+  generator: "v0.app",
 };
 
 export default function RootLayout({
@@ -31,12 +35,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+      <body className={cn(GeistSans.variable, GeistMono.variable, instrumentSerif.variable)}>
+        <V0Provider isV0={isV0}>
+          {children}
+          {isV0 && <V0Setup />}
+        </V0Provider>
       </body>
     </html>
   );

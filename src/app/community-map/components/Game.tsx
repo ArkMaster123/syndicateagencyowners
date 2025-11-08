@@ -161,6 +161,9 @@ export default function GameComponent() {
       }
     };
 
+    // Generate a random player sprite ID (WorkAdventure approach)
+    const playerSpriteId = characterSpriteManager.getRandomCharacter(Math.random() > 0.5 ? 'male' : 'female');
+
     // Game loop
     const gameLoop = () => {
       update();

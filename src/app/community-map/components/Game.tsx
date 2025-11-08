@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { TilesetLoader } from '../utils/TilesetLoader';
 import { MapParser } from '../utils/MapParser';
-import { GameState } from '../utils/types';
+import { GameState, OnlinePlayer } from '../utils/types';
 import { CharacterSpriteManager } from '../utils/CharacterSpriteManager';
 import { JitsiMeetingRoom } from '../utils/types';
 import JitsiMeeting from './JitsiMeeting';
 import NameModal from './NameModal';
+import CharacterSelector from './CharacterSelector';
+import SettingsMenu from './SettingsMenu';
 
 interface WorkAdventureAPI {
   // WorkAdventure specific properties if needed
@@ -23,6 +26,7 @@ declare global {
 
 // Simple player state management using browser storage (WorkAdventure approach)
 const PLAYER_NAME_KEY = 'wa_player_name';
+const PLAYER_CHARACTER_KEY = 'wa_player_character';
 
 function getStoredPlayerName(): string | null {
   if (typeof window === 'undefined') return null;
@@ -32,6 +36,16 @@ function getStoredPlayerName(): string | null {
 function setStoredPlayerName(name: string): void {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(PLAYER_NAME_KEY, name);
+}
+
+function getStoredCharacter(): string | null {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(PLAYER_CHARACTER_KEY);
+}
+
+function setStoredCharacter(characterId: string): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(PLAYER_CHARACTER_KEY, characterId);
 }
 
 // Helper function to find valid spawn position (not in walls)
@@ -80,18 +94,51 @@ export default function GameComponent() {
   const [jitsiRooms, setJitsiRooms] = useState<JitsiMeetingRoom[]>([]);
   const [pendingJitsiRoom, setPendingJitsiRoom] = useState<JitsiMeetingRoom | null>(null);
   const pendingJitsiRoomRef = useRef<JitsiMeetingRoom | null>(null);
-  
+
   // Player state (WorkAdventure approach - session storage)
   const [playerName, setPlayerName] = useState<string | null>(() => getStoredPlayerName());
+  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(() => {
+    const stored = getStoredCharacter();
+    // Validate character ID - must start with su1_ for school uniforms
+    if (stored && !stored.startsWith('su1_')) {
+      console.log('[Game] Clearing invalid character ID:', stored);
+      sessionStorage.removeItem(PLAYER_CHARACTER_KEY);
+      return null;
+    }
+    return stored;
+  });
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
 
   // Handle player name submission
   const handleNameSubmit = (name: string) => {
     setStoredPlayerName(name);
     setPlayerName(name);
+    // Show character selector after name is set
+    setShowCharacterSelector(true);
+  };
+
+  // Handle character selection
+  const handleCharacterSelect = (characterId: string) => {
+    setStoredCharacter(characterId);
+    setSelectedCharacter(characterId);
+    setShowCharacterSelector(false);
+  };
+
+  // Handle change name from settings
+  const handleChangeName = () => {
+    setPlayerName(null);
+    setSelectedCharacter(null);
+    sessionStorage.removeItem(PLAYER_NAME_KEY);
+    sessionStorage.removeItem(PLAYER_CHARACTER_KEY);
+  };
+
+  // Handle change character from settings
+  const handleChangeCharacter = () => {
+    setShowCharacterSelector(true);
   };
 
   useEffect(() => {
-    if (!canvasRef.current || !playerName) return;
+    if (!canvasRef.current || !playerName || !selectedCharacter) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -108,13 +155,10 @@ export default function GameComponent() {
     const gameState: GameState = {
       player: { x: 10, y: 15, facing: 'down' },
       npcs: [
-        { id: 'james', name: 'James Mitchell', role: 'CEO - Growth Strategy', x: 8, y: 8, available: true, color: '#8b5cf6' },
-        { id: 'sarah', name: 'Sarah Chen', role: 'AI Marketing Expert', x: 15, y: 8, available: true, color: '#6366f1' },
-        { id: 'marcus', name: 'Marcus Rodriguez', role: 'SEO Specialist', x: 22, y: 8, available: false, color: '#10b981' },
-        { id: 'community', name: 'Community Manager', role: 'General Help', x: 8, y: 15, available: true, color: '#8b5cf6' },
-        { id: 'ai', name: 'AI Assistant', role: '24/7 Support', x: 15, y: 15, available: true, color: '#6366f1' },
+        // Keep only the cat as a fun NPC
         { id: 'cat', name: 'Whiskers', role: 'Office Cat', x: 12, y: 12, available: false, color: '#f59e0b' },
       ],
+      onlinePlayers: new Map<string, OnlinePlayer>(),
       tileSize: 32,
       mapWidth: 31,
       mapHeight: 21,
@@ -161,13 +205,99 @@ export default function GameComponent() {
       }
     };
 
-    // Generate a random player sprite ID (WorkAdventure approach)
-    const playerSpriteId = characterSpriteManager.getRandomCharacter(Math.random() > 0.5 ? 'male' : 'female');
+    // Use selected character sprite ID
+    const playerSpriteId = selectedCharacter;
+
+    // Socket.IO client setup (WorkAdventure-style multiplayer)
+    let socket: Socket | null = null;
+    let lastBroadcastX = gameState.player.x;
+    let lastBroadcastY = gameState.player.y;
+    let lastBroadcastFacing = gameState.player.facing;
+
+    const initSocket = () => {
+      console.log('[Socket.IO] Connecting to multiplayer server...');
+      socket = io('http://localhost:3000', {
+        transports: ['websocket', 'polling']
+      });
+
+      socket.on('connect', () => {
+        console.log('[Socket.IO] Connected with ID:', socket?.id);
+
+        // Send player join event
+        socket?.emit('player-join', {
+          name: playerName,
+          x: gameState.player.x,
+          y: gameState.player.y,
+          facing: gameState.player.facing,
+          spriteId: playerSpriteId
+        });
+      });
+
+      // Receive initial players list
+      socket.on('players-list', (players: OnlinePlayer[]) => {
+        console.log('[Socket.IO] Received players list:', players.length);
+        gameState.onlinePlayers.clear();
+        players.forEach(player => {
+          if (player.id !== socket?.id) {
+            gameState.onlinePlayers.set(player.id, player);
+          }
+        });
+      });
+
+      // New player joined
+      socket.on('player-joined', (player: OnlinePlayer) => {
+        console.log('[Socket.IO] Player joined:', player.name);
+        gameState.onlinePlayers.set(player.id, player);
+      });
+
+      // Player moved
+      socket.on('player-moved', (data: { id: string; x: number; y: number; facing: string }) => {
+        const player = gameState.onlinePlayers.get(data.id);
+        if (player) {
+          player.x = data.x;
+          player.y = data.y;
+          player.facing = data.facing as 'up' | 'down' | 'left' | 'right';
+          gameState.onlinePlayers.set(data.id, player);
+        }
+      });
+
+      // Player left
+      socket.on('player-left', (data: { id: string }) => {
+        console.log('[Socket.IO] Player left:', data.id);
+        gameState.onlinePlayers.delete(data.id);
+      });
+
+      socket.on('disconnect', () => {
+        console.log('[Socket.IO] Disconnected from server');
+      });
+    };
+
+    // Broadcast player movement (throttled to avoid spamming)
+    const broadcastMovement = () => {
+      if (!socket?.connected) return;
+
+      const moved = Math.abs(gameState.player.x - lastBroadcastX) > 0.1 ||
+                    Math.abs(gameState.player.y - lastBroadcastY) > 0.1 ||
+                    gameState.player.facing !== lastBroadcastFacing;
+
+      if (moved) {
+        socket.emit('player-moved', {
+          x: gameState.player.x,
+          y: gameState.player.y,
+          facing: gameState.player.facing
+        });
+
+        lastBroadcastX = gameState.player.x;
+        lastBroadcastY = gameState.player.y;
+        lastBroadcastFacing = gameState.player.facing;
+      }
+    };
 
     // Game loop
     const gameLoop = () => {
       update();
       render();
+      broadcastMovement(); // Broadcast to other players
       requestAnimationFrame(gameLoop);
     };
 
@@ -276,6 +406,11 @@ export default function GameComponent() {
           npc,
           index,
           y: npc.y
+        })),
+        ...Array.from(gameState.onlinePlayers.values()).map(player => ({
+          type: 'online_player' as const,
+          player,
+          y: player.y
         })),
         {
           type: 'player' as const,
@@ -651,17 +786,22 @@ export default function GameComponent() {
 
     // Start rendering immediately (shows loading screen)
     gameLoop();
-    
+
     // Start game initialization
     initGame();
 
+    // Connect to multiplayer server
+    initSocket();
+
     return () => {
       // Cleanup
+      console.log('[Socket.IO] Disconnecting...');
+      socket?.disconnect();
       window.removeEventListener('keydown', () => {});
       window.removeEventListener('keyup', () => {});
       document.querySelectorAll('.fixed').forEach(el => el.remove());
     };
-  }, [playerName]); // Only re-run when playerName changes
+  }, [playerName, selectedCharacter]); // Re-run when playerName or character changes
 
   // Animation frame counter
   useEffect(() => {
@@ -682,16 +822,28 @@ export default function GameComponent() {
           <NameModal onSubmit={handleNameSubmit} />
         </>
       )}
-      
+
+      {showCharacterSelector && (
+        <CharacterSelector onSelect={handleCharacterSelect} />
+      )}
+
+      {playerName && selectedCharacter && (
+        <SettingsMenu
+          playerName={playerName}
+          onChangeName={handleChangeName}
+          onChangeCharacter={handleChangeCharacter}
+        />
+      )}
+
       <div className="w-full h-full flex items-center justify-center bg-black relative">
-        <canvas 
+        <canvas
           ref={canvasRef}
           width={1024}
           height={768}
           className="border border-white/20 rounded-lg max-w-full"
           style={{ imageRendering: 'pixelated' }}
         />
-        {!gameLoaded && playerName && (
+        {!gameLoaded && playerName && selectedCharacter && (
           <div className="absolute inset-0 bg-black flex items-center justify-center">
             <div className="text-white text-xl">
               {assetsLoaded ? 'Loading Community Map...' : 'Loading Assets...'}
@@ -699,9 +851,9 @@ export default function GameComponent() {
           </div>
         )}
         {currentJitsiRoom && (
-          <JitsiMeeting 
-            room={currentJitsiRoom} 
-            onClose={() => setCurrentJitsiRoom(null)} 
+          <JitsiMeeting
+            room={currentJitsiRoom}
+            onClose={() => setCurrentJitsiRoom(null)}
           />
         )}
       </div>

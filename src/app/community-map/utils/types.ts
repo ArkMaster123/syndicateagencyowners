@@ -85,6 +85,15 @@ export interface TileImage {
   loaded: boolean;
 }
 
+export interface OnlinePlayer {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  facing: 'up' | 'down' | 'left' | 'right';
+  spriteId: string;
+}
+
 export interface GameState {
   player: {
     x: number;
@@ -100,6 +109,7 @@ export interface GameState {
     available: boolean;
     color: string;
   }>;
+  onlinePlayers: Map<string, OnlinePlayer>;
   tileSize: number;
   mapWidth: number;
   mapHeight: number;

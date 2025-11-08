@@ -15,16 +15,16 @@ export class CharacterSpriteManager {
   async loadSprites(): Promise<void> {
     const spritePromises: Promise<void>[] = [];
 
-    // Load male sprites
+    // Load school character sprites - females
     for (let i = 1; i <= 18; i++) {
-      const spritePath = `/character-sprites/male/Male ${i.toString().padStart(2, '0')}-1.png`;
-      spritePromises.push(this.loadCharacterSprite(`male_${i.toString().padStart(2, '0')}`, spritePath));
+      const spritePath = `/character-sprites/school-characters/school uniform 1/su1 Student fmale ${i.toString().padStart(2, '0')}.png`;
+      spritePromises.push(this.loadCharacterSprite(`su1_female_${i.toString().padStart(2, '0')}`, spritePath));
     }
 
-    // Load female sprites  
-    for (let i = 1; i <= 25; i++) {
-      const spritePath = `/character-sprites/female/Female ${i.toString().padStart(2, '0')}-1.png`;
-      spritePromises.push(this.loadCharacterSprite(`female_${i.toString().padStart(2, '0')}`, spritePath));
+    // Load school character sprites - males
+    for (let i = 1; i <= 13; i++) {
+      const spritePath = `/character-sprites/school-characters/school uniform 1/su1 Student male ${i.toString().padStart(2, '0')}.png`;
+      spritePromises.push(this.loadCharacterSprite(`su1_male_${i.toString().padStart(2, '0')}`, spritePath));
     }
 
     // Load cat sprite

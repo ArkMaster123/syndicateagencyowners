@@ -18,10 +18,10 @@ export default function CommunityMapPage() {
             {/* Logo */}
             <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-foreground/10 to-foreground/20 border border-foreground/20 flex items-center justify-center backdrop-blur-md">
-                <span className="text-foreground font-serif text-xl italic">AS</span>
+                <span className="text-foreground font-serif text-xl italic">B&B</span>
               </div>
               <span className="font-serif text-2xl italic tracking-tight text-foreground">
-                Agency Syndicate
+                Born & Brand
               </span>
             </Link>
 

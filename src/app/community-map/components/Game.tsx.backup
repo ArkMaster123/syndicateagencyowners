@@ -1,0 +1,404 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+declare global {
+  interface Window {
+    workadventure?: any;
+  }
+}
+
+export default function GameComponent() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [gameLoaded, setGameLoaded] = useState(false);
+  const [currentNPC, setCurrentNPC] = useState<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    // Simple canvas-based game implementation
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    
+    if (!ctx) return;
+
+    // Game state
+    const gameState = {
+      player: { x: 5, y: 5, facing: 'down' },
+      npcs: [
+        { id: 'james', name: 'James Mitchell', role: 'CEO - Growth Strategy', x: 5, y: 3, available: true, color: '#8b5cf6' },
+        { id: 'sarah', name: 'Sarah Chen', role: 'AI Marketing Expert', x: 9, y: 3, available: true, color: '#6366f1' },
+        { id: 'marcus', name: 'Marcus Rodriguez', role: 'SEO Specialist', x: 13, y: 3, available: false, color: '#10b981' },
+        { id: 'community', name: 'Community Manager', role: 'General Help', x: 5, y: 8, available: true, color: '#8b5cf6' },
+        { id: 'ai', name: 'AI Assistant', role: '24/7 Support', x: 9, y: 8, available: true, color: '#6366f1' },
+      ],
+      tileSize: 64,
+      mapWidth: 16,
+      mapHeight: 12,
+      keys: {},
+      mobileControls: { up: false, down: false, left: false, right: false }
+    };
+
+    // Initialize game
+    const initGame = () => {
+      setGameLoaded(true);
+      gameLoop();
+      setupControls();
+    };
+
+    // Game loop
+    const gameLoop = () => {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    };
+
+    // Update game state
+    const update = () => {
+      handleMovement();
+      checkNPCProximity();
+    };
+
+    // Render game
+    const render = () => {
+      if (!ctx || !canvas) return;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw floor tiles
+      ctx.fillStyle = '#1e1b4b';
+      for (let x = 0; x < gameState.mapWidth; x++) {
+        for (let y = 0; y < gameState.mapHeight; y++) {
+          if ((x === 0 || x === gameState.mapWidth - 1 || y === 0 || y === gameState.mapHeight - 1) ||
+              (x >= 4 && x <= 6 && y >= 2 && y <= 5) || // Meeting room 1
+              (x >= 8 && x <= 10 && y >= 2 && y <= 5) || // Meeting room 2  
+              (x >= 12 && x <= 14 && y >= 2 && y <= 5) || // Meeting room 3
+              (x >= 4 && x <= 6 && y >= 7 && y <= 9) || // Resource area
+              (x >= 8 && x <= 10 && y >= 7 && y <= 9)) { // Lounge
+            ctx.fillStyle = '#374151';
+          } else {
+            ctx.fillStyle = '#1e1b4b';
+          }
+          ctx.fillRect(x * gameState.tileSize, y * gameState.tileSize, gameState.tileSize, gameState.tileSize);
+          
+          // Draw grid lines
+          ctx.strokeStyle = '#2d1b69';
+          ctx.strokeRect(x * gameState.tileSize, y * gameState.tileSize, gameState.tileSize, gameState.tileSize);
+        }
+      }
+
+      // Draw room labels
+      ctx.fillStyle = '#8b5cf6';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Meeting Rooms', 5.5 * gameState.tileSize, 1.5 * gameState.tileSize);
+      ctx.fillStyle = '#10b981';
+      ctx.fillText('Resource Area', 5.5 * gameState.tileSize, 6.5 * gameState.tileSize);
+      ctx.fillStyle = '#6366f1';
+      ctx.fillText('Community Lounge', 9.5 * gameState.tileSize, 6.5 * gameState.tileSize);
+
+      // Draw NPCs
+      gameState.npcs.forEach(npc => {
+        // Draw NPC circle
+        ctx.fillStyle = npc.color;
+        ctx.beginPath();
+        ctx.arc(
+          npc.x * gameState.tileSize + gameState.tileSize / 2,
+          npc.y * gameState.tileSize + gameState.tileSize / 2,
+          20,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+        
+        // Draw NPC initial
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(npc.name.charAt(0), npc.x * gameState.tileSize + gameState.tileSize / 2, npc.y * gameState.tileSize + gameState.tileSize / 2 + 4);
+        
+        // Draw availability indicator
+        ctx.fillStyle = npc.available ? '#10b981' : '#ef4444';
+        ctx.beginPath();
+        ctx.arc(
+          npc.x * gameState.tileSize + gameState.tileSize - 10,
+          npc.y * gameState.tileSize + 10,
+          4,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      });
+
+      // Draw player
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(
+        gameState.player.x * gameState.tileSize + gameState.tileSize / 2 - 8,
+        gameState.player.y * gameState.tileSize + gameState.tileSize / 2 - 8,
+        16,
+        16
+      );
+      
+      // Draw player direction indicator
+      ctx.fillStyle = '#f59e0b';
+      switch (gameState.player.facing) {
+        case 'up':
+          ctx.fillRect(gameState.player.x * gameState.tileSize + gameState.tileSize / 2 - 2, gameState.player.y * gameState.tileSize + gameState.tileSize / 2 - 12, 4, 8);
+          break;
+        case 'down':
+          ctx.fillRect(gameState.player.x * gameState.tileSize + gameState.tileSize / 2 - 2, gameState.player.y * gameState.tileSize + gameState.tileSize / 2 + 4, 4, 8);
+          break;
+        case 'left':
+          ctx.fillRect(gameState.player.x * gameState.tileSize + gameState.tileSize / 2 - 12, gameState.player.y * gameState.tileSize + gameState.tileSize / 2 - 2, 8, 4);
+          break;
+        case 'right':
+          ctx.fillRect(gameState.player.x * gameState.tileSize + gameState.tileSize / 2 + 4, gameState.player.y * gameState.tileSize + gameState.tileSize / 2 - 2, 8, 4);
+          break;
+      }
+
+      // Draw interaction prompt
+      if (currentNPC) {
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
+        ctx.fillRect(50, canvas.height - 80, canvas.width - 100, 60);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Press SPACE to meet ${currentNPC.name}`, canvas.width / 2, canvas.height - 50);
+      }
+    };
+
+    // Handle player movement
+    const handleMovement = () => {
+      const speed = 0.15;
+      let newX = gameState.player.x;
+      let newY = gameState.player.y;
+      let newFacing = gameState.player.facing;
+
+      if (gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.mobileControls.up) {
+        newY = Math.max(1, gameState.player.y - speed);
+        newFacing = 'up';
+      }
+      if (gameState.keys['ArrowDown'] || gameState.keys['s'] || gameState.mobileControls.down) {
+        newY = Math.min(gameState.mapHeight - 2, gameState.player.y + speed);
+        newFacing = 'down';
+      }
+      if (gameState.keys['ArrowLeft'] || gameState.keys['a'] || gameState.mobileControls.left) {
+        newX = Math.max(1, gameState.player.x - speed);
+        newFacing = 'left';
+      }
+      if (gameState.keys['ArrowRight'] || gameState.keys['d'] || gameState.mobileControls.right) {
+        newX = Math.min(gameState.mapWidth - 2, gameState.player.x + speed);
+        newFacing = 'right';
+      }
+
+      // Check collision with walls
+      if (!checkWallCollision(newX, newY)) {
+        gameState.player.x = newX;
+        gameState.player.y = newY;
+        gameState.player.facing = newFacing;
+      }
+    };
+
+    // Check wall collision
+    const checkWallCollision = (x: number, y: number) => {
+      const gridX = Math.floor(x);
+      const gridY = Math.floor(y);
+      
+      // Outer walls
+      if (gridX <= 0 || gridX >= gameState.mapWidth - 1 || 
+          gridY <= 0 || gridY >= gameState.mapHeight - 1) {
+        return true;
+      }
+      
+      // Inner room walls
+      if ((gridX >= 4 && gridX <= 6 && gridY >= 2 && gridY <= 5) || // Meeting room 1
+          (gridX >= 8 && gridX <= 10 && gridY >= 2 && gridY <= 5) || // Meeting room 2  
+          (gridX >= 12 && gridX <= 14 && gridY >= 2 && gridY <= 5) || // Meeting room 3
+          (gridX >= 4 && gridX <= 6 && gridY >= 7 && gridY <= 9) || // Resource area
+          (gridX >= 8 && gridX <= 10 && gridY >= 7 && gridY <= 9)) { // Lounge
+        // Check if trying to enter a room
+        if ((gridX === 4 || gridX === 8 || gridX === 12) && gridY === 2) {
+          return false; // Allow entry
+        }
+        if ((gridX === 4 || gridX === 8) && gridY === 7) {
+          return false; // Allow entry
+        }
+        if (gridX === 9 && gridY === 7) {
+          return false; // Allow entry
+        }
+        return true;
+      }
+      
+      return false;
+    };
+
+    // Check NPC proximity
+    const checkNPCProximity = () => {
+      let nearestNPC = null;
+      let minDistance = Infinity;
+
+      gameState.npcs.forEach(npc => {
+        const distance = Math.sqrt(
+          Math.pow(gameState.player.x - npc.x, 2) + 
+          Math.pow(gameState.player.y - npc.y, 2)
+        );
+        
+        if (distance < 1.5 && distance < minDistance) {
+          minDistance = distance;
+          nearestNPC = npc;
+        }
+      });
+
+      setCurrentNPC(nearestNPC);
+    };
+
+    // Setup controls
+    const setupControls = () => {
+      // Keyboard controls
+      const handleKeyDown = (e: KeyboardEvent) => {
+        gameState.keys[e.key] = true;
+        
+        if (e.key === ' ') {
+          e.preventDefault();
+          if (currentNPC) {
+            openMeetingModal(currentNPC);
+          }
+        }
+      };
+
+      const handleKeyUp = (e: KeyboardEvent) => {
+        gameState.keys[e.key] = false;
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+
+      // Mobile controls
+      if (window.innerWidth <= 768) {
+        createMobileControls();
+      }
+    };
+
+    // Create mobile controls
+    const createMobileControls = () => {
+      const controlsDiv = document.createElement('div');
+      controlsDiv.className = 'fixed bottom-4 right-4 z-50 glass-effect rounded-lg p-4';
+      controlsDiv.innerHTML = `
+        <div class="grid grid-cols-3 gap-2 max-w-xs">
+          <div></div>
+          <button id="mobile-up" class="px-4 py-2 bg-white/20 text-white rounded hover:bg-white/30">↑</button>
+          <div></div>
+          <button id="mobile-left" class="px-4 py-2 bg-white/20 text-white rounded hover:bg-white/30">←</button>
+          <button id="mobile-down" class="px-4 py-2 bg-white/20 text-white rounded hover:bg-white/30">↓</button>
+          <button id="mobile-right" class="px-4 py-2 bg-white/20 text-white rounded hover:bg-white/30">→</button>
+        </div>
+      `;
+      document.body.appendChild(controlsDiv);
+
+      // Mobile control events
+      const handleMobileControl = (direction: string, pressed: boolean) => {
+        gameState.mobileControls[direction] = pressed;
+        setTimeout(() => {
+          gameState.mobileControls[direction] = false;
+        }, 100);
+      };
+
+      document.getElementById('mobile-up')?.addEventListener('touchstart', () => handleMobileControl('up', true));
+      document.getElementById('mobile-up')?.addEventListener('touchend', () => handleMobileControl('up', false));
+      document.getElementById('mobile-down')?.addEventListener('touchstart', () => handleMobileControl('down', true));
+      document.getElementById('mobile-down')?.addEventListener('touchend', () => handleMobileControl('down', false));
+      document.getElementById('mobile-left')?.addEventListener('touchstart', () => handleMobileControl('left', true));
+      document.getElementById('mobile-left')?.addEventListener('touchend', () => handleMobileControl('left', false));
+      document.getElementById('mobile-right')?.addEventListener('touchstart', () => handleMobileControl('right', true));
+      document.getElementById('mobile-right')?.addEventListener('touchend', () => handleMobileControl('right', false));
+    };
+
+    // Open meeting modal
+    const openMeetingModal = (npc: any) => {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="glass-effect rounded-xl p-6 max-w-md mx-4">
+          <div class="flex items-center mb-4">
+            <div class="w-16 h-16 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl mr-4">
+              ${npc.name.charAt(0)}
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-white">${npc.name}</h3>
+              <p class="text-white/70">${npc.role}</p>
+              <div class="flex items-center mt-2">
+                <div class="w-2 h-2 ${npc.available ? 'bg-green-400' : 'bg-red-400'} rounded-full mr-2"></div>
+                <span class="text-sm ${npc.available ? 'text-green-400' : 'text-red-400'}">
+                  ${npc.available ? 'Available' : 'Busy'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          ${npc.available ? `
+            <div class="mb-4">
+              <h4 class="text-white font-semibold mb-2">Available Time Slots</h4>
+              <div class="grid grid-cols-2 gap-2">
+                <button class="px-3 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors">9:00 AM</button>
+                <button class="px-3 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors">10:00 AM</button>
+                <button class="px-3 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors">2:00 PM</button>
+                <button class="px-3 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors">3:00 PM</button>
+              </div>
+            </div>
+            <div class="mb-4">
+              <input type="email" placeholder="your@email.com" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded text-white placeholder-white/50 mb-2">
+              <textarea placeholder="What would you like to discuss?" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded text-white placeholder-white/50 h-20 resize-none"></textarea>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-white/10 text-white rounded hover:bg-white/20 transition-colors">Cancel</button>
+              <button onclick="bookMeeting('${npc.id}')" class="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded hover:from-violet-700 hover:to-indigo-700 transition-all">Book Meeting</button>
+            </div>
+          ` : `
+            <div class="text-center py-4">
+              <p class="text-white/70 mb-4">${npc.name} is currently busy. Please try again later.</p>
+              <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-white/10 text-white rounded hover:bg-white/20 transition-colors">Close</button>
+            </div>
+          `}
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Add global function for booking
+      (window as any).bookMeeting = (npcId: string) => {
+        console.log('Booking meeting with:', npcId);
+        alert(`Meeting request sent! ${npcId} will contact you soon.`);
+        modal.remove();
+      };
+    };
+
+    // Start the game
+    initGame();
+
+    return () => {
+      // Cleanup
+      window.removeEventListener('keydown', () => {});
+      window.removeEventListener('keyup', () => {});
+      document.querySelectorAll('.fixed').forEach(el => el.remove());
+    };
+  }, []);
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-black">
+      <canvas 
+        ref={canvasRef}
+        width={1024}
+        height={768}
+        className="border border-white/20 rounded-lg max-w-full"
+        style={{ imageRendering: 'pixelated' }}
+      />
+      {!gameLoaded && (
+        <div className="absolute inset-0 bg-black flex items-center justify-center">
+          <div className="text-white text-xl">Loading Community Map...</div>
+        </div>
+      )}
+    </div>
+  );
+}
